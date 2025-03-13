@@ -75,20 +75,21 @@ def analyze_data(data):
             gaps = [indices[i] - indices[i - 1] for i in range(1, len(indices))]
             avg_gaps[tail] = sum(gaps) / len(gaps)  # Trung bình khoảng cách giữa các lần xuất hiện
         else:
-            avg_gaps[tail] = 1000  # Gán số lớn nếu chỉ xuất hiện 1 lần (ít có khả năng lặp lại)
+            avg_gaps[tail] = float('inf')  # Nếu chỉ xuất hiện 1 lần, đặt khoảng cách rất lớn
 
     # Kết hợp tần suất và chu kỳ lặp lại để tính điểm dự đoán
-    scores = {}
-    for tail in freq_all:
-        scores[tail] = freq_all[tail] / (avg_gaps[tail] + 1)  # Tránh chia cho 0
+    scores = {tail: freq_all[tail] / (avg_gaps[tail] + 1) for tail in freq_all}
 
-    # Chọn ra 5 số có điểm cao nhất
-    top_five = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
+    # Tìm điểm cao nhất trong tất cả các số
+    max_score = max(scores.values()) if scores else 0
 
-    # Lấy số có điểm cao nhất làm số dự đoán chính
-    predicted_tail = top_five[0][0] if top_five else "000"
+    # Lấy tất cả các số có điểm cao nhất
+    top_numbers = [tail for tail, score in scores.items() if score == max_score]
 
-    return predicted_tail, [tail for tail, _ in top_five]
+    # Nếu không có số nào, trả về "000"
+    predicted_tail = top_numbers[0] if top_numbers else "000"
+
+    return predicted_tail, top_numbers
 
 
 # Tạo 5 số 3 chữ số
