@@ -79,9 +79,15 @@ def analyze_data(data, decay_rate=0.2):
 
     # Top 3 số nóng (dựa trên weighted_freq)
     hot_numbers = [tail for tail, _ in weighted_freq.most_common(3)]
-    # Top 2 số lạnh (dựa trên avg_gaps lớn)
-    cold_numbers = [tail for tail, gap in sorted(avg_gaps.items(), key=lambda x: x[1], reverse=True) if tail in weighted_freq][:2]
     
+    # Top 2 số lạnh (tránh trùng với số nóng)
+    cold_candidates = [(tail, gap) for tail, gap in sorted(avg_gaps.items(), key=lambda x: x[1], reverse=True) if tail in weighted_freq]
+    cold_numbers = []
+    for tail, _ in cold_candidates:
+        if tail not in hot_numbers and len(cold_numbers) < 2:
+            cold_numbers.append(tail)
+
+    # Gộp và đảm bảo không trùng
     top_numbers = hot_numbers + cold_numbers
     predicted_tail = hot_numbers[0] if hot_numbers else "000"
     return predicted_tail, top_numbers
