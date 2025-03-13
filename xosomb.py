@@ -1,4 +1,4 @@
-import math
+import random
 import requests
 from collections import Counter
 from telegram import Update
@@ -41,7 +41,7 @@ def get_lottery_data(province):
     return data
 
 
-def analyze_data(data, recent_exclusion=2):
+def analyze_data(data, recent_exclusion=2, num_predictions=5):
     if not data:
         return "000", []
 
@@ -49,48 +49,62 @@ def analyze_data(data, recent_exclusion=2):
     data_sorted = sorted(data, key=lambda x: x["opendate"], reverse=True)
     all_tails = [''.join(entry["code"]["code"].split(','))[-3:] for entry in data_sorted]
 
-    # Loại bỏ các kết quả từ `recent_exclusion` kỳ gần nhất khỏi danh sách hot numbers
+    # Loại bỏ các kết quả từ `recent_exclusion` kỳ gần nhất
     recent_tails = set(all_tails[:recent_exclusion])
-    analysis_tails = all_tails[recent_exclusion:]  # Dữ liệu dùng để phân tích, bỏ qua kỳ gần nhất
+    analysis_tails = all_tails[recent_exclusion:]  # Dữ liệu phân tích
 
     if not analysis_tails:
         return "000", []
 
-    # Tính tần suất xuất hiện tổng quát
-    freq = Counter(analysis_tails)
-
-    # Lịch sử xuất hiện và khoảng cách trung bình
+    # Tính lịch sử xuất hiện và khoảng cách
     history = {}
-    for idx, tail in enumerate(all_tails):  # Dùng all_tails để tính gap chính xác
+    for idx, tail in enumerate(all_tails):
         if tail not in history:
             history[tail] = []
         history[tail].append(idx)
 
-    avg_gaps = {}
+    # Tính khoảng cách trung bình và độ lệch (variance) của khoảng cách
+    stats = {}
     for tail, indices in history.items():
         if len(indices) > 1:
             gaps = [indices[i] - indices[i - 1] for i in range(1, len(indices))]
-            avg_gaps[tail] = sum(gaps) / len(gaps)
+            avg_gap = sum(gaps) / len(gaps)
+            variance = sum((g - avg_gap) ** 2 for g in gaps) / len(gaps) if len(gaps) > 1 else 0
+            stats[tail] = {
+                "avg_gap": avg_gap,
+                "variance": variance,
+                "last_appearance": min(indices),  # Lần xuất hiện gần nhất
+                "frequency": len(indices)
+            }
         else:
-            avg_gaps[tail] = float('inf')
+            stats[tail] = {"avg_gap": float('inf'), "variance": 0, "last_appearance": indices[0], "frequency": 1}
 
-    # Chọn 3 số "hot" dựa trên tần suất, loại bỏ các số từ kỳ gần nhất
-    hot_numbers = [tail for tail, _ in freq.most_common(3) if tail not in recent_tails]
-    if len(hot_numbers) < 3:
-        # Nếu không đủ 3 số, lấy thêm từ freq nhưng vẫn tránh recent_tails
-        remaining = [tail for tail, _ in freq.most_common() if tail not in recent_tails and tail not in hot_numbers]
-        hot_numbers.extend(remaining[:3 - len(hot_numbers)])
+    # Lọc các số tiềm năng dựa trên tiêu chí
+    candidates = [tail for tail in stats if tail not in recent_tails]
 
-    # Chọn 2 số "cold" dựa trên khoảng cách trung bình lớn nhất (lâu chưa về)
-    cold_candidates = [(tail, gap) for tail, gap in sorted(avg_gaps.items(), key=lambda x: x[1], reverse=True) if tail in freq]
-    cold_numbers = []
-    for tail, _ in cold_candidates:
-        if tail not in hot_numbers and tail not in recent_tails and len(cold_numbers) < 2:
-            cold_numbers.append(tail)
+    # Điểm số (score) cho mỗi số dựa trên các yếu tố
+    scored_candidates = []
+    for tail in candidates:
+        s = stats[tail]
+        # Điểm dựa trên: 
+        # - Khoảng cách trung bình (lâu chưa về thì điểm cao hơn)
+        # - Độ lệch thấp (chu kỳ ổn định thì đáng tin hơn)
+        # - Tần suất vừa phải (không quá ít, không quá nhiều)
+        score = (s["avg_gap"] / (max([stats[t]["avg_gap"] for t in candidates]) + 1)) * 0.4 + \
+                (1 / (s["variance"] + 1)) * 0.3 + \
+                (min(s["frequency"], 10) / 10) * 0.3  # Giới hạn tần suất tối đa để tránh bias
+        scored_candidates.append((tail, score))
 
-    # Kết hợp hot và cold numbers
-    top_numbers = hot_numbers[:3] + cold_numbers[:2]
-    predicted_tail = hot_numbers[0] if hot_numbers else "000"
+    # Sắp xếp theo điểm số
+    scored_candidates.sort(key=lambda x: x[1], reverse=True)
+
+    # Chọn top candidates
+    top_candidates = [tail for tail, _ in scored_candidates[:max(10, num_predictions * 2)]]
+
+    # Chọn ngẫu nhiên từ top candidates để tránh thiên kiến quá mức
+    random.seed()  # Có thể dùng thời gian hiện tại làm seed nếu muốn
+    top_numbers = random.sample(top_candidates, min(num_predictions, len(top_candidates)))
+    predicted_tail = top_numbers[0] if top_numbers else "000"
 
     return predicted_tail, top_numbers
 
