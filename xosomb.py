@@ -1,6 +1,6 @@
+import math
 import requests
 from collections import Counter
-import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 from datetime import datetime
@@ -58,47 +58,41 @@ def get_lottery_data():
     return all_data
 
 # Phân tích dữ liệu
-def analyze_data(data):
+def analyze_data(data, decay_rate=0.1):
     if not data:
         return "000", []
 
-    # Sắp xếp dữ liệu theo ngày mở thưởng (mới nhất -> cũ nhất)
+    # Sắp xếp theo ngày, mới nhất trước
     data_sorted = sorted(data, key=lambda x: x["opendate"], reverse=True)
-
-    # Lấy toàn bộ 3 số cuối từ tất cả các kỳ quay
     all_tails = [''.join(entry["code"]["code"].split(','))[-3:] for entry in data_sorted]
 
-    # Đếm tần suất xuất hiện
-    freq_all = Counter(all_tails)
+    # Tính tần suất có trọng số
+    weighted_freq = Counter()
+    for idx, tail in enumerate(all_tails):
+        weight = math.exp(-decay_rate * idx)  # Trọng số giảm dần theo thời gian
+        weighted_freq[tail] += weight
 
-    # Lưu lại lịch sử xuất hiện của từng số theo thứ tự ngày
+    # Tính khoảng cách trung bình
     history = {}
     for idx, tail in enumerate(all_tails):
         if tail not in history:
             history[tail] = []
-        history[tail].append(idx)  # Lưu vị trí của lần xuất hiện
+        history[tail].append(idx)
 
-    # Tính khoảng cách trung bình giữa các lần xuất hiện của từng số
     avg_gaps = {}
     for tail, indices in history.items():
-        if len(indices) > 1:  # Phải xuất hiện ít nhất 2 lần để tính khoảng cách
+        if len(indices) > 1:
             gaps = [indices[i] - indices[i - 1] for i in range(1, len(indices))]
-            avg_gaps[tail] = sum(gaps) / len(gaps)  # Trung bình khoảng cách giữa các lần xuất hiện
+            avg_gaps[tail] = sum(gaps) / len(gaps)
         else:
-            avg_gaps[tail] = float('inf')  # Nếu chỉ xuất hiện 1 lần, đặt khoảng cách rất lớn
+            avg_gaps[tail] = float('inf')
 
-    # Kết hợp tần suất và chu kỳ lặp lại để tính điểm dự đoán
-    scores = {tail: freq_all[tail] / (avg_gaps[tail] + 1) for tail in freq_all}
-
-    # Tìm điểm cao nhất trong tất cả các số
+    # Tính điểm
+    scores = {tail: weighted_freq[tail] / (avg_gaps[tail] + 1) for tail in weighted_freq}
     max_score = max(scores.values()) if scores else 0
-
-    # Lấy tất cả các số có điểm cao nhất
     top_numbers = [tail for tail, score in scores.items() if score == max_score]
 
-    # Nếu không có số nào, trả về "000"
     predicted_tail = top_numbers[0] if top_numbers else "000"
-
     return predicted_tail, top_numbers
 
 
