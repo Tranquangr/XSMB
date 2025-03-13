@@ -11,10 +11,6 @@ from flask import Flask
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "Bot is running!"
-
 TOKEN = "7629529039:AAGd6Ul3xyZoyzrJ0WyVdG-iWsNgcUFgqgc"
 
 API_URLS = {
@@ -32,23 +28,19 @@ WEEKDAY_TO_PROVINCE = {
 }
 
 def get_lottery_data(province):
-    print(f"Đang gọi API cho {province}")
     data = []
     url = API_URLS[province]
     try:
         response = requests.get(url, timeout=10)
-        print(f"Status code từ API {province}: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
         else:
             print(f"Lỗi: Không thể truy cập API {province} (mã lỗi: {response.status_code})")
     except Exception as e:
         print(f"Lỗi khi gọi API {province}: {e}")
-    print(f"Đã lấy được {len(data)} kỳ từ API {province}")
     return data
 
 def analyze_data(data, decay_rate=0.2):
-    print(f"Đang phân tích dữ liệu, số kỳ: {len(data)}")
     if not data:
         return "000", []
 
@@ -83,18 +75,11 @@ def analyze_data(data, decay_rate=0.2):
 
     top_numbers = hot_numbers + cold_numbers
     predicted_tail = hot_numbers[0] if hot_numbers else "000"
-    print(f"Dự đoán chính: {predicted_tail}, Top numbers: {top_numbers}")
     return predicted_tail, top_numbers
 
-async def start(update: Update, context: CallbackContext):
-    print("Nhận lệnh /start")
-    await update.message.reply_text(
-        "Chào bạn! Tôi là bot dự đoán xổ số miền Bắc.\n"
-        "Gửi /predict để nhận 5 số 3 chữ số dự đoán cho giải đặc biệt hôm nay."
-    )
-
-async def predict(update: Update, context: CallbackContext):
-    print("Nhận lệnh /predict")
+# Flask route cho web
+@app.route('/')
+def web_predict():
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
     today = datetime.now(tz)
     today_province = WEEKDAY_TO_PROVINCE[today.weekday()]
@@ -102,7 +87,36 @@ async def predict(update: Update, context: CallbackContext):
     
     data = get_lottery_data(today_province)
     if not data:
-        print("Không có dữ liệu, gửi thông báo lỗi")
+        return "<h1>Lỗi: Không lấy được dữ liệu!</h1>"
+
+    predicted_tail, top_numbers = analyze_data(data, decay_rate=0.2)
+    
+    html = f"""
+    <h1>Dự đoán xổ số {today_province} ({today_date})</h1>
+    <h2>3 chữ số cuối giải đặc biệt chính: {predicted_tail}</h2>
+    <h3>Số 3 chữ số dự đoán tiềm năng:</h3>
+    <ul>
+    """
+    for num in top_numbers:
+        html += f"<li>{num}</li>"
+    html += "</ul>"
+    return html
+
+# Telegram bot
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text(
+        "Chào bạn! Tôi là bot dự đoán xổ số miền Bắc.\n"
+        "Gửi /predict để nhận 5 số 3 chữ số dự đoán cho giải đặc biệt hôm nay."
+    )
+
+async def predict(update: Update, context: CallbackContext):
+    tz = pytz.timezone("Asia/Ho_Chi_Minh")
+    today = datetime.now(tz)
+    today_province = WEEKDAY_TO_PROVINCE[today.weekday()]
+    today_date = today.strftime("%Y-%m-%d")
+    
+    data = get_lottery_data(today_province)
+    if not data:
         await update.message.reply_text(f"Không lấy được dữ liệu cho {today_province} hôm nay!")
         return
     
@@ -113,7 +127,6 @@ async def predict(update: Update, context: CallbackContext):
         f"3 chữ số cuối giải đặc biệt chính: {predicted_tail}\n"
         "Số 3 chữ số dự đoán tiềm năng:\n" + "\n".join(top_numbers) + "\n"
     )
-    print(f"Gửi phản hồi: {response}")
     await update.message.reply_text(response)
 
 def main():
