@@ -92,25 +92,6 @@ def analyze_data(data):
     return predicted_tail, top_numbers
 
 
-# Tạo 5 số 3 chữ số
-def generate_three_digit_numbers(predicted_tail, top_five):
-    numbers = [predicted_tail]
-    for tail in top_five:
-        if tail != predicted_tail and len(numbers) < 5:
-            numbers.append(tail)
-    
-    digits = list(predicted_tail)
-    while len(numbers) < 5:
-        new_number = digits.copy()
-        pos = random.randint(0, 2)
-        new_digit = str(random.randint(0, 9))
-        new_number[pos] = new_digit
-        new_number = ''.join(new_number)
-        if new_number not in numbers:
-            numbers.append(new_number)
-    
-    return numbers
-
 # Lệnh /start
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text(
@@ -126,15 +107,12 @@ async def predict(update: Update, context: CallbackContext):
     today_date = today.strftime("%Y-%m-%d")
     
     data = get_lottery_data()
-    predicted_tail, top_five = analyze_data(data)
-    numbers = generate_three_digit_numbers(predicted_tail, top_five)
+    predicted_tail, top_numbers = analyze_data(data)
     
     response = (
         f"Dự đoán cho {today_province} ({today_date}):\n"
         f"3 chữ số cuối giải đặc biệt chính: {predicted_tail}\n"
-        "5 số 3 chữ số dự đoán:\n" + "\n".join(numbers) +
-        f"\n\nTop 5 dãy 3 số tiềm năng: {', '.join(top_five)}"
-    )
+        "số 3 chữ số dự đoán tiềm năng:\n" + "\n".join(top_numbers) + "\n"   )
     await update.message.reply_text(response)
 
 # Chạy bot
