@@ -6,6 +6,7 @@ from telegram.ext import Application, CommandHandler, CallbackContext
 from datetime import datetime
 import pytz
 import os
+import threading
 
 from flask import Flask
 
@@ -134,12 +135,15 @@ def main():
     application.run_polling()
 
 
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+
 if __name__ == "__main__":
+    # Chạy Flask trên luồng riêng
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
     # Chạy bot Telegram
     main()
-    
-    # Lấy PORT từ biến môi trường (Render yêu cầu PORT)
-    port = int(os.environ.get("PORT", 5000))
-    
-    # Chạy Flask trên cổng PORT (để Render nhận diện)
-    app.run(host="0.0.0.0", port=port)
