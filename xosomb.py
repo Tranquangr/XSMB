@@ -40,20 +40,28 @@ def get_lottery_data(province):
         print(f"Lỗi khi gọi API {province}: {e}")
     return data
 
-def analyze_data(data, decay_rate=0.2):
+
+def analyze_data(data, recent_exclusion=2):
     if not data:
         return "000", []
 
+    # Sắp xếp dữ liệu theo ngày, mới nhất trước
     data_sorted = sorted(data, key=lambda x: x["opendate"], reverse=True)
     all_tails = [''.join(entry["code"]["code"].split(','))[-3:] for entry in data_sorted]
 
-    weighted_freq = Counter()
-    for idx, tail in enumerate(all_tails):
-        weight = math.exp(-decay_rate * idx)
-        weighted_freq[tail] += weight
+    # Loại bỏ các kết quả từ `recent_exclusion` kỳ gần nhất khỏi danh sách hot numbers
+    recent_tails = set(all_tails[:recent_exclusion])
+    analysis_tails = all_tails[recent_exclusion:]  # Dữ liệu dùng để phân tích, bỏ qua kỳ gần nhất
 
+    if not analysis_tails:
+        return "000", []
+
+    # Tính tần suất xuất hiện tổng quát
+    freq = Counter(analysis_tails)
+
+    # Lịch sử xuất hiện và khoảng cách trung bình
     history = {}
-    for idx, tail in enumerate(all_tails):
+    for idx, tail in enumerate(all_tails):  # Dùng all_tails để tính gap chính xác
         if tail not in history:
             history[tail] = []
         history[tail].append(idx)
@@ -66,18 +74,26 @@ def analyze_data(data, decay_rate=0.2):
         else:
             avg_gaps[tail] = float('inf')
 
-    hot_numbers = [tail for tail, _ in weighted_freq.most_common(3)]
-    cold_candidates = [(tail, gap) for tail, gap in sorted(avg_gaps.items(), key=lambda x: x[1], reverse=True) if tail in weighted_freq]
+    # Chọn 3 số "hot" dựa trên tần suất, loại bỏ các số từ kỳ gần nhất
+    hot_numbers = [tail for tail, _ in freq.most_common(3) if tail not in recent_tails]
+    if len(hot_numbers) < 3:
+        # Nếu không đủ 3 số, lấy thêm từ freq nhưng vẫn tránh recent_tails
+        remaining = [tail for tail, _ in freq.most_common() if tail not in recent_tails and tail not in hot_numbers]
+        hot_numbers.extend(remaining[:3 - len(hot_numbers)])
+
+    # Chọn 2 số "cold" dựa trên khoảng cách trung bình lớn nhất (lâu chưa về)
+    cold_candidates = [(tail, gap) for tail, gap in sorted(avg_gaps.items(), key=lambda x: x[1], reverse=True) if tail in freq]
     cold_numbers = []
     for tail, _ in cold_candidates:
-        if tail not in hot_numbers and len(cold_numbers) < 2:
+        if tail not in hot_numbers and tail not in recent_tails and len(cold_numbers) < 2:
             cold_numbers.append(tail)
 
-    top_numbers = hot_numbers + cold_numbers
+    # Kết hợp hot và cold numbers
+    top_numbers = hot_numbers[:3] + cold_numbers[:2]
     predicted_tail = hot_numbers[0] if hot_numbers else "000"
+
     return predicted_tail, top_numbers
 
-# Flask route cho web
 @app.route('/')
 def web_predict():
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
