@@ -7,7 +7,7 @@ from datetime import datetime
 import pytz
 
 # Token của bạn
-TOKEN = "8033665362:AAG_qCNvqzb0Xs_mtHa6LpQFtHsMeOz33cA"
+TOKEN = "7629529039:AAGd6Ul3xyZoyzrJ0WyVdG-iWsNgcUFgqgc"
 
 # Danh sách API
 API_URLS = {
@@ -51,23 +51,45 @@ def get_lottery_data():
 def analyze_data(data):
     if not data:
         return "000", []
-    
+
+    # Sắp xếp dữ liệu theo ngày mở thưởng (mới nhất -> cũ nhất)
     data_sorted = sorted(data, key=lambda x: x["opendate"], reverse=True)
+
+    # Lấy toàn bộ 3 số cuối từ tất cả các kỳ quay
     all_tails = [''.join(entry["code"]["code"].split(','))[-3:] for entry in data_sorted]
+
+    # Đếm tần suất xuất hiện
     freq_all = Counter(all_tails)
-    
-    recent_data = data_sorted[:20]
-    recent_tails = [''.join(entry["code"]["code"].split(','))[-3:] for entry in recent_data]
-    freq_recent = Counter(recent_tails)
-    
-    combined_freq = {}
+
+    # Lưu lại lịch sử xuất hiện của từng số theo thứ tự ngày
+    history = {}
+    for idx, tail in enumerate(all_tails):
+        if tail not in history:
+            history[tail] = []
+        history[tail].append(idx)  # Lưu vị trí của lần xuất hiện
+
+    # Tính khoảng cách trung bình giữa các lần xuất hiện của từng số
+    avg_gaps = {}
+    for tail, indices in history.items():
+        if len(indices) > 1:  # Phải xuất hiện ít nhất 2 lần để tính khoảng cách
+            gaps = [indices[i] - indices[i - 1] for i in range(1, len(indices))]
+            avg_gaps[tail] = sum(gaps) / len(gaps)  # Trung bình khoảng cách giữa các lần xuất hiện
+        else:
+            avg_gaps[tail] = 1000  # Gán số lớn nếu chỉ xuất hiện 1 lần (ít có khả năng lặp lại)
+
+    # Kết hợp tần suất và chu kỳ lặp lại để tính điểm dự đoán
+    scores = {}
     for tail in freq_all:
-        score = freq_all[tail] * 0.6 + (freq_recent.get(tail, 0) * 0.4)
-        combined_freq[tail] = score
-    
-    top_five = sorted(combined_freq.items(), key=lambda x: x[1], reverse=True)[:5]
-    predicted_tail = top_five[0][0]
+        scores[tail] = freq_all[tail] / (avg_gaps[tail] + 1)  # Tránh chia cho 0
+
+    # Chọn ra 5 số có điểm cao nhất
+    top_five = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    # Lấy số có điểm cao nhất làm số dự đoán chính
+    predicted_tail = top_five[0][0] if top_five else "000"
+
     return predicted_tail, [tail for tail, _ in top_five]
+
 
 # Tạo 5 số 3 chữ số
 def generate_three_digit_numbers(predicted_tail, top_five):
