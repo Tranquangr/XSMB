@@ -1,6 +1,6 @@
 import requests
 from collections import Counter
-import random
+import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 from datetime import datetime
@@ -124,5 +124,8 @@ def main():
     print("Bot đã khởi động!")
     application.run_polling()
 
+
 if __name__ == "__main__":
     main()
+    while True:
+        time.sleep(3600)
