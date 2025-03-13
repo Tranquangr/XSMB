@@ -5,6 +5,15 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 from datetime import datetime
 import pytz
+import os
+
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
 
 # Token của bạn
 TOKEN = "7629529039:AAGd6Ul3xyZoyzrJ0WyVdG-iWsNgcUFgqgc"
@@ -126,6 +135,11 @@ def main():
 
 
 if __name__ == "__main__":
+    # Chạy bot Telegram
     main()
-    while True:
-        time.sleep(3600)
+    
+    # Lấy PORT từ biến môi trường (Render yêu cầu PORT)
+    port = int(os.environ.get("PORT", 5000))
+    
+    # Chạy Flask trên cổng PORT (để Render nhận diện)
+    app.run(host="0.0.0.0", port=port)
