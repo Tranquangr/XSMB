@@ -105,7 +105,7 @@ def web_predict():
     if not data:
         return "<h1>Lỗi: Không lấy được dữ liệu!</h1>"
 
-    predicted_tail, top_numbers = analyze_data(data, decay_rate=0.2)
+    predicted_tail, top_numbers = analyze_data(data)
     
     html = f"""
     <h1>Dự đoán xổ số {today_province} ({today_date})</h1>
@@ -136,7 +136,7 @@ async def predict(update: Update, context: CallbackContext):
         await update.message.reply_text(f"Không lấy được dữ liệu cho {today_province} hôm nay!")
         return
     
-    predicted_tail, top_numbers = analyze_data(data, decay_rate=0.2)
+    predicted_tail, top_numbers = analyze_data(data)
     
     response = (
         f"Dự đoán cho {today_province} ({today_date}):\n"
