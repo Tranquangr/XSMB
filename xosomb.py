@@ -27,18 +27,20 @@ WEEKDAY_TO_PROVINCE = {
     4: "Hải Phòng", 5: "Nam Định", 6: "Thái Bình"
 }
 
-def get_lottery_data(province):
-    data = []
-    url = API_URLS[province]
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-        else:
-            print(f"Lỗi: Không thể truy cập API {province} (mã lỗi: {response.status_code})")
-    except Exception as e:
-        print(f"Lỗi khi gọi API {province}: {e}")
-    return data
+def get_lottery_data():
+    combined_data = []
+    for province, url in API_URLS.items():
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                combined_data.extend(data)  # Kết hợp dữ liệu từ tất cả các tỉnh
+                print(f"Đã lấy dữ liệu từ {province}")
+            else:
+                print(f"Lỗi: Không thể truy cập API {province} (mã lỗi: {response.status_code})")
+        except Exception as e:
+            print(f"Lỗi khi gọi API {province}: {e}")
+    return combined_data
 
 
 def analyze_data(data, recent_exclusion=2, num_predictions=5):
@@ -115,7 +117,7 @@ def web_predict():
     today_province = WEEKDAY_TO_PROVINCE[today.weekday()]
     today_date = today.strftime("%Y-%m-%d")
     
-    data = get_lottery_data(today_province)
+    data = get_lottery_data()
     if not data:
         return "<h1>Lỗi: Không lấy được dữ liệu!</h1>"
 
@@ -145,7 +147,7 @@ async def predict(update: Update, context: CallbackContext):
     today_province = WEEKDAY_TO_PROVINCE[today.weekday()]
     today_date = today.strftime("%Y-%m-%d")
     
-    data = get_lottery_data(today_province)
+    data = get_lottery_data()
     if not data:
         await update.message.reply_text(f"Không lấy được dữ liệu cho {today_province} hôm nay!")
         return
