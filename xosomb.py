@@ -8,10 +8,12 @@ import pytz
 import os
 import threading
 from flask import Flask
+from openai import OpenAI
 
 app = Flask(__name__)
 
 TOKEN = "7629529039:AAGd6Ul3xyZoyzrJ0WyVdG-iWsNgcUFgqgc"
+XAI_API_KEY = "xai-bCAnQDsXHUDJbxk5H0tg5dklrk9zgNckG8uHHBXsPiSmso7XFmDFfAfkJCma1T5ncevsv1xudih5fj8z"
 
 API_URLS = {
     "Hà Nội": "http://vip.manycai.com/K267d27554a0f78/hnc-100.json",
@@ -26,6 +28,19 @@ WEEKDAY_TO_PROVINCE = {
     0: "Hà Nội", 1: "Quảng Ninh", 2: "Bắc Ninh", 3: "Hà Nội",
     4: "Hải Phòng", 5: "Nam Định", 6: "Thái Bình"
 }
+
+client = OpenAI(
+    api_key=XAI_API_KEY,
+    base_url="https://api.x.ai/v1",
+)
+
+TAROT_CARDS = [
+    "The Fool", "The Magician", "The High Priestess", "The Empress", "The Emperor",
+    "The Hierophant", "The Lovers", "The Chariot", "Strength", "The Hermit",
+    "Wheel of Fortune", "Justice", "The Hanged Man", "Death", "Temperance",
+    "The Devil", "The Tower", "The Star", "The Moon", "The Sun",
+    "Judgement", "The World"
+]
 
 def get_lottery_data():
     combined_data = []
@@ -110,6 +125,52 @@ def analyze_data(data, recent_exclusion=2, num_predictions=5):
 
     return predicted_tail, top_numbers
 
+
+async def tarot(update: Update, context: CallbackContext):
+    tz = pytz.timezone("Asia/Ho_Chi_Minh")
+    current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Chọn ngẫu nhiên 3 lá bài
+    random.seed()
+    drawn_cards = random.sample(TAROT_CARDS, 3)
+    
+    # Tạo prompt cho xAI
+    prompt = (
+        f"Tôi đã rút 3 lá bài Tarot cho một người dùng vào lúc {current_time}:\n"
+        f"- Quá khứ: {drawn_cards[0]}\n"
+        f"- Hiện tại: {drawn_cards[1]}\n"
+        f"- Tương lai: {drawn_cards[2]}\n"
+        "Hãy giải thích ngắn gọn nhưng sâu sắc ý nghĩa của các lá bài này theo từng vị trí, "
+        "kèm theo lời khuyên tích cực cho người nhận. Viết bằng tiếng Việt, mỗi phần khoảng 2-3 câu."
+    )
+    
+    try:
+        # Gọi API xAI
+        completion = client.chat.completions.create(
+            model="grok-2-latest",
+            messages=[
+                {"role": "system", "content": "Bạn là một chuyên gia Tarot thông thái và tích cực."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            temperature=0.7
+        )
+        
+        # Lấy phản hồi từ xAI
+        response = completion.choices[0].message.content
+        
+        # Gửi phản hồi cho người dùng
+        await update.message.reply_text(response)
+        
+    except Exception as e:
+        await update.message.reply_text(
+            f"Rút bài Tarot thành công nhưng giải thích gặp lỗi: {str(e)}\n"
+            f"Các lá bài của bạn:\n"
+            f"Quá khứ: {drawn_cards[0]}\n"
+            f"Hiện tại: {drawn_cards[1]}\n"
+            f"Tương lai: {drawn_cards[2]}"
+        )
+
 @app.route('/')
 def web_predict():
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
@@ -137,8 +198,9 @@ def web_predict():
 # Telegram bot
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text(
-        "Chào bạn! Tôi là bot dự đoán xổ số miền Bắc.\n"
-        "Gửi /predict để nhận 5 số 3 chữ số dự đoán cho giải đặc biệt hôm nay."
+        "Chào bạn! Tôi là bot dự đoán xổ số và bói bài Tarot miền Bắc.\n"
+        "Gửi /predict để nhận 5 số 3 chữ số dự đoán cho giải đặc biệt hôm nay.\n"
+        "Gửi /tarot để xem bói bài Tarot (Quá khứ - Hiện tại - Tương lai)."
     )
 
 async def predict(update: Update, context: CallbackContext):
@@ -165,6 +227,7 @@ def main():
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("predict", predict))
+    application.add_handler(CommandHandler("tarot", tarot))
     print("Bot đã khởi động!")
     application.run_polling()
 
