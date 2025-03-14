@@ -153,23 +153,36 @@ async def tarot(update: Update, context: CallbackContext):
     tz = pytz.timezone("Asia/Ho_Chi_Minh")
     current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
     
+    # Lấy toàn bộ text sau lệnh /tarot (không cần dấu ") và gộp lại thành một chuỗi
+    question = " ".join(context.args) if context.args else None
+    
     # Chọn ngẫu nhiên 3 lá bài
     random.seed()
     drawn_cards = random.sample(TAROT_CARDS, 3)
     
     # Tạo prompt cho Google Gemini
-    prompt = (
-        f"Tôi đã rút 3 lá bài Tarot cho một người dùng vào lúc {current_time}:\n"
-        f"- Quá khứ: {drawn_cards[0]}\n"
-        f"- Hiện tại: {drawn_cards[1]}\n"
-        f"- Tương lai: {drawn_cards[2]}\n"
-        "Hãy giải thích ngắn gọn nhưng sâu sắc ý nghĩa của các lá bài này theo từng vị trí, "
-        "kèm theo lời khuyên tích cực cho người nhận. Viết bằng tiếng Việt, mỗi phần khoảng 2-3 câu."
-    )
+    if question:
+        prompt = (
+            f"Tôi đã rút 3 lá bài Tarot cho một người dùng vào lúc {current_time} với câu hỏi: {question}\n"
+            f"- Quá khứ: {drawn_cards[0]}\n"
+            f"- Hiện tại: {drawn_cards[1]}\n"
+            f"- Tương lai: {drawn_cards[2]}\n"
+            "Hãy giải thích ngắn gọn nhưng sâu sắc ý nghĩa của các lá bài này theo từng vị trí, liên quan đến câu hỏi, "
+            "kèm theo lời khuyên tích cực cho người nhận. Viết bằng tiếng Việt, mỗi phần khoảng 2-3 câu."
+        )
+    else:
+        prompt = (
+            f"Tôi đã rút 3 lá bài Tarot cho một người dùng vào lúc {current_time}:\n"
+            f"- Quá khứ: {drawn_cards[0]}\n"
+            f"- Hiện tại: {drawn_cards[1]}\n"
+            f"- Tương lai: {drawn_cards[2]}\n"
+            "Hãy giải thích ngắn gọn nhưng sâu sắc ý nghĩa của các lá bài này theo từng vị trí, "
+            "kèm theo lời khuyên tích cực cho người nhận. Viết bằng tiếng Việt, mỗi phần khoảng 2-3 câu."
+        )
     
     try:
         # Gọi API Google Gemini
-        model = genai.GenerativeModel("gemini-2.0-flash")  # Model mới nhất tính đến 2025
+        model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
         
         # Lấy nội dung từ phản hồi
@@ -180,14 +193,24 @@ async def tarot(update: Update, context: CallbackContext):
             
     except Exception as e:
         # Fallback khi API lỗi
-        fallback_response = (
-            f"Rút bài Tarot thành công nhưng không thể kết nối API Google: {str(e)}\n"
-            f"Các lá bài của bạn:\n"
-            f"**Quá khứ - {drawn_cards[0]}**: {TAROT_MEANINGS.get(drawn_cards[0], 'Ý nghĩa đang được cập nhật.')}\n"
-            f"**Hiện tại - {drawn_cards[1]}**: {TAROT_MEANINGS.get(drawn_cards[1], 'Ý nghĩa đang được cập nhật.')}\n"
-            f"**Tương lai - {drawn_cards[2]}**: {TAROT_MEANINGS.get(drawn_cards[2], 'Ý nghĩa đang được cập nhật.')}\n"
-            "**Lời khuyên**: Hãy tin vào hành trình của bạn và tìm kiếm sự cân bằng trong mọi việc!"
-        )
+        if question:
+            fallback_response = (
+                f"Rút bài Tarot cho câu hỏi '{question}' thành công nhưng không thể kết nối API Google: {str(e)}\n"
+                f"Các lá bài của bạn:\n"
+                f"**Quá khứ - {drawn_cards[0]}**: {TAROT_MEANINGS.get(drawn_cards[0], 'Ý nghĩa đang được cập nhật.')}\n"
+                f"**Hiện tại - {drawn_cards[1]}**: {TAROT_MEANINGS.get(drawn_cards[1], 'Ý nghĩa đang được cập nhật.')}\n"
+                f"**Tương lai - {drawn_cards[2]}**: {TAROT_MEANINGS.get(drawn_cards[2], 'Ý nghĩa đang được cập nhật.')}\n"
+                "**Lời khuyên**: Hãy tin vào trực giác và tìm kiếm câu trả lời từ bên trong bạn!"
+            )
+        else:
+            fallback_response = (
+                f"Rút bài Tarot thành công nhưng không thể kết nối API Google: {str(e)}\n"
+                f"Các lá bài của bạn:\n"
+                f"**Quá khứ - {drawn_cards[0]}**: {TAROT_MEANINGS.get(drawn_cards[0], 'Ý nghĩa đang được cập nhật.')}\n"
+                f"**Hiện tại - {drawn_cards[1]}**: {TAROT_MEANINGS.get(drawn_cards[1], 'Ý nghĩa đang được cập nhật.')}\n"
+                f"**Tương lai - {drawn_cards[2]}**: {TAROT_MEANINGS.get(drawn_cards[2], 'Ý nghĩa đang được cập nhật.')}\n"
+                "**Lời khuyên**: Hãy tin vào hành trình của bạn và tìm kiếm sự cân bằng trong mọi việc!"
+            )
         await update.message.reply_text(fallback_response)
 
 @app.route('/')
@@ -219,7 +242,7 @@ async def start(update: Update, context: CallbackContext):
     await update.message.reply_text(
         "Chào bạn! Tôi là bot dự đoán xổ số và bói bài Tarot miền Bắc.\n"
         "Gửi /predict để nhận 5 số 3 chữ số dự đoán cho giải đặc biệt hôm nay.\n"
-        "Gửi /tarot để xem bói bài Tarot (Quá khứ - Hiện tại - Tương lai)."
+        "Gửi /tarot để xem bói chung hoặc /tarot Tình yêu của tôi thế nào? để hỏi cụ thể."
     )
 
 async def predict(update: Update, context: CallbackContext):
