@@ -8,12 +8,13 @@ import pytz
 import os
 import threading
 from flask import Flask
-from openai import OpenAI
+import google.generativeai as genai
 
 app = Flask(__name__)
 
 TOKEN = "7629529039:AAGd6Ul3xyZoyzrJ0WyVdG-iWsNgcUFgqgc"
 XAI_API_KEY = "xai-bCAnQDsXHUDJbxk5H0tg5dklrk9zgNckG8uHHBXsPiSmso7XFmDFfAfkJCma1T5ncevsv1xudih5fj8z"
+GOOGLE_API_KEY="AIzaSyDG6bBtOB3YuCtZwJAXhCRVayHY7ulyFBA"
 
 API_URLS = {
     "Hà Nội": "http://vip.manycai.com/K267d27554a0f78/hnc-100.json",
@@ -29,10 +30,7 @@ WEEKDAY_TO_PROVINCE = {
     4: "Hải Phòng", 5: "Nam Định", 6: "Thái Bình"
 }
 
-client = OpenAI(
-    api_key=XAI_API_KEY,
-    base_url="https://api.x.ai/v1",
-)
+genai.configure(api_key=GOOGLE_API_KEY)
 
 TAROT_CARDS = [
     "The Fool", "The Magician", "The High Priestess", "The Empress", "The Emperor",
@@ -41,6 +39,31 @@ TAROT_CARDS = [
     "The Devil", "The Tower", "The Star", "The Moon", "The Sun",
     "Judgement", "The World"
 ]
+
+TAROT_MEANINGS = {
+    "The Fool": "Sự khởi đầu mới, ngây thơ và sẵn sàng khám phá.",
+    "The Magician": "Sức mạnh ý chí, sự sáng tạo và biến ý tưởng thành hiện thực.",
+    "The High Priestess": "Trực giác sâu sắc, bí ẩn và sự kết nối tâm linh.",
+    "The Empress": "Sự phong phú, nuôi dưỡng và tình yêu thiên nhiên.",
+    "The Emperor": "Quyền lực, cấu trúc và sự kiểm soát có trách nhiệm.",
+    "The Hierophant": "Truyền thống, hướng dẫn tinh thần và sự tuân thủ.",
+    "The Lovers": "Tình yêu, sự lựa chọn và hài hòa trong mối quan hệ.",
+    "The Chariot": "Ý chí mạnh mẽ, quyết tâm và chiến thắng qua nỗ lực.",
+    "Strength": "Sức mạnh nội tại, lòng can đảm và sự dịu dàng.",
+    "The Hermit": "Tìm kiếm sự thật bên trong, cô độc và trí tuệ.",
+    "Wheel of Fortune": "Chu kỳ thay đổi, cơ hội và định mệnh.",
+    "Justice": "Công bằng, sự thật và hậu quả của hành động.",
+    "The Hanged Man": "Sự hy sinh, buông bỏ và nhìn nhận từ góc độ mới.",
+    "Death": "Sự kết thúc và khởi đầu mới, biến đổi sâu sắc.",
+    "Temperance": "Sự cân bằng, kiên nhẫn và hòa hợp.",
+    "The Devil": "Sự ràng buộc, cám dỗ và đối mặt với bóng tối bên trong.",
+    "The Tower": "Sự sụp đổ đột ngột, thay đổi lớn và cơ hội tái tạo.",
+    "The Star": "Hy vọng, cảm hứng và ánh sáng sau bóng tối.",
+    "The Moon": "Ảo ảnh, sự mơ hồ và khám phá tiềm thức.",
+    "The Sun": "Niềm vui, thành công và năng lượng tích cực.",
+    "Judgement": "Sự thức tỉnh, đánh giá và tái sinh bản thân.",
+    "The World": "Hoàn thành, sự viên mãn và kết nối với vũ trụ."
+}
 
 def get_lottery_data():
     combined_data = []
@@ -134,7 +157,7 @@ async def tarot(update: Update, context: CallbackContext):
     random.seed()
     drawn_cards = random.sample(TAROT_CARDS, 3)
     
-    # Tạo prompt cho xAI
+    # Tạo prompt cho Google Gemini
     prompt = (
         f"Tôi đã rút 3 lá bài Tarot cho một người dùng vào lúc {current_time}:\n"
         f"- Quá khứ: {drawn_cards[0]}\n"
@@ -145,31 +168,27 @@ async def tarot(update: Update, context: CallbackContext):
     )
     
     try:
-        # Gọi API xAI
-        completion = client.chat.completions.create(
-            model="grok-2-latest",
-            messages=[
-                {"role": "system", "content": "Bạn là một chuyên gia Tarot thông thái và tích cực."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=300,
-            temperature=0.7
-        )
+        # Gọi API Google Gemini
+        model = genai.GenerativeModel("gemini-2.0-flash")  # Model mới nhất tính đến 2025
+        response = model.generate_content(prompt)
         
-        # Lấy phản hồi từ xAI
-        response = completion.choices[0].message.content
-        
-        # Gửi phản hồi cho người dùng
-        await update.message.reply_text(response)
-        
+        # Lấy nội dung từ phản hồi
+        if response.text:
+            await update.message.reply_text(response.text)
+        else:
+            raise ValueError("Không nhận được phản hồi từ API!")
+            
     except Exception as e:
-        await update.message.reply_text(
-            f"Rút bài Tarot thành công nhưng giải thích gặp lỗi: {str(e)}\n"
+        # Fallback khi API lỗi
+        fallback_response = (
+            f"Rút bài Tarot thành công nhưng không thể kết nối API Google: {str(e)}\n"
             f"Các lá bài của bạn:\n"
-            f"Quá khứ: {drawn_cards[0]}\n"
-            f"Hiện tại: {drawn_cards[1]}\n"
-            f"Tương lai: {drawn_cards[2]}"
+            f"**Quá khứ - {drawn_cards[0]}**: {TAROT_MEANINGS.get(drawn_cards[0], 'Ý nghĩa đang được cập nhật.')}\n"
+            f"**Hiện tại - {drawn_cards[1]}**: {TAROT_MEANINGS.get(drawn_cards[1], 'Ý nghĩa đang được cập nhật.')}\n"
+            f"**Tương lai - {drawn_cards[2]}**: {TAROT_MEANINGS.get(drawn_cards[2], 'Ý nghĩa đang được cập nhật.')}\n"
+            "**Lời khuyên**: Hãy tin vào hành trình của bạn và tìm kiếm sự cân bằng trong mọi việc!"
         )
+        await update.message.reply_text(fallback_response)
 
 @app.route('/')
 def web_predict():
